@@ -1055,6 +1055,9 @@ qboolean PM_GentCantJump( gentity_t *gent )
 
 static qboolean PM_CheckJump( void ) 
 {
+	// Posto : Idea, log every anim and current state on the console
+
+
 	// AUSTIN Reset air-kick when on the ground
 	if (pm->ps->groundEntityNum != ENTITYNUM_NONE)
 	{
