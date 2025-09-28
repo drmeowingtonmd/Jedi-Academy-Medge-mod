@@ -117,7 +117,6 @@ gentity_t		*player;
 cvar_t	*g_speed;
 cvar_t	*g_gravity;
 cvar_t	*g_stepSlideFix;
-cvar_t* g_wallBoostSpeed; // AUSTIN wall boost speed
 
 cvar_t	*g_sex;
 cvar_t	*g_spskill;
@@ -205,6 +204,10 @@ cvar_t	*g_crouchBoosts;
 cvar_t	*g_reverseBoosts;
 cvar_t	*g_randomBoosts;
 cvar_t	*g_selfKnockback;
+
+// New additions for MEDGE movement
+cvar_t* g_wallBoostSpeed; // AUSTIN wall boost speed
+cvar_t* g_MEDGEDebug;
 
 qboolean	stop_icarus = qfalse;
 
@@ -609,7 +612,6 @@ void G_InitCvars( void ) {
 	g_spskill = gi.cvar ("g_spskill", "0", CVAR_ARCHIVE | CVAR_SAVEGAME|CVAR_NORESTART);
 	g_knockback = gi.cvar( "g_knockback", "1000", CVAR_CHEAT );
 	g_dismemberment = gi.cvar ( "g_dismemberment", "3", CVAR_ARCHIVE );//0 = none, 1 = arms and hands, 2 = legs, 3 = waist and head
-	g_wallBoostSpeed = gi.cvar("g_wallBoostSpeed", "200", CVAR_ARCHIVE); // AUSTIN wall boost speed (default 200)
 	// for now I'm making default 10 seconds
 	g_corpseRemovalTime = gi.cvar ( "g_corpseRemovalTime", "10", CVAR_ARCHIVE );//number of seconds bodies stick around for, at least... 0 = never go away
 	g_synchSplitAnims = gi.cvar ( "g_synchSplitAnims", "1", 0 );
@@ -681,12 +683,17 @@ void G_InitCvars( void ) {
 
 	g_broadsword = gi.cvar( "broadsword", "1", 0);
 
+	// Speed Academy additions
 	g_vrgi = gi.cvar( "g_vrgi", "1", CVAR_ARCHIVE );
 	g_spinGlitch = gi.cvar( "g_spinGlitch", "1", CVAR_ARCHIVE );
 	g_crouchBoosts = gi.cvar( "g_crouchBoosts", "1", CVAR_ARCHIVE );
 	g_reverseBoosts = gi.cvar( "g_reverseBoosts", "0", CVAR_ARCHIVE );
 	g_randomBoosts = gi.cvar( "g_randomBoosts", "1", CVAR_CHEAT );
 	g_selfKnockback = gi.cvar( "g_selfKnockback", "0", CVAR_CHEAT );
+
+	// MEDGE movement additions
+	g_wallBoostSpeed = gi.cvar("g_wallBoostSpeed", "200", CVAR_ARCHIVE); // AUSTIN wall boost speed (default 200)
+	g_MEDGEDebug = gi.cvar("g_MEDGEDebug", "0", CVAR_ARCHIVE);
 
 	gi.cvar( "tier_storyinfo", "0", CVAR_ROM|CVAR_SAVEGAME|CVAR_NORESTART);
 	gi.cvar( "tiers_complete", "", CVAR_ROM|CVAR_SAVEGAME|CVAR_NORESTART);

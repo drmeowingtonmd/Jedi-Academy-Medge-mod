@@ -1,4 +1,4 @@
-﻿/ pm->ps->groundEntityNum / this include must remain at the top of every bg_xxxx CPP file
+// this include must remain at the top of every bg_xxxx CPP file
 #include "common_headers.h"
 
 #include "../renderer/tr_public.h"
@@ -163,13 +163,6 @@ const float	pm_frictionModifier	= 3.0f;	//Used for "careful" mode (when pressing
 const float pm_airDecelRate = 1.35f;	//Used for air decelleration away from current movement velocity
 
 int	c_pmove = 0;
-
-// MEDGE movement additions
-extern cvar_t* g_wallBoostSpeed;	//AUSTIN wall boost speed console command
-extern cvar_t* g_MEDGEDebug;
-static int lastKickBoostTime = 0; //AUSTIN kick time variable here
-int lastMovementDirDebug = -1;
-
 
 extern void PM_SetTorsoAnimTimer( gentity_t *ent, int *torsoAnimTimer, int time );
 extern void PM_SetLegsAnimTimer( gentity_t *ent, int *legsAnimTimer, int time );
@@ -398,7 +391,7 @@ qboolean PM_CheckGrabWall( trace_t *trace )
 				anim = BOTH_FORCEWALLREBOUND_BACK;
 			}
 		}
-		else if ( DotProduct( rtDir, wallDir ) > 0 )	//AUSTIN grab might be here
+		else if ( DotProduct( rtDir, wallDir ) > 0 )
 		{//hit a wall on the right
 			anim = BOTH_FORCEWALLREBOUND_RIGHT;
 		}
@@ -434,18 +427,11 @@ qboolean PM_ClientImpact( trace_t *trace, qboolean damageSelf )
 	if ( otherEntityNum == ENTITYNUM_WORLD
 		|| (traceEnt->bmodel && traceEnt->s.pos.trType == TR_STATIONARY ) )
 	{//hit world or a non-moving brush
-		/*
-		qboolean PM_TryAirWallRun(trace_t * trace);
-		if (PM_TryAirWallRun(trace)) {
-			return qtrue;
-		}
-		*/
 		if ( PM_CheckGrabWall( trace ) )
 		{//stopped on the wall
 			return qtrue;
 		}
 	}
-	
 
 	if( (VectorLength( pm->ps->velocity )*(pm->gent->mass/10)) >= 100 && (pm->gent->client->NPC_class == CLASS_VEHICLE || pm->ps->lastOnGround+100<level.time) )//was 300 ||(other->material>=MAT_GLASS&&pm->gent->lastImpact+100<=level.time))
 	{
@@ -628,7 +614,7 @@ static void PM_Friction( void ) {
 			*/
 		}
 	}
-	else if ( Flying != FLY_NORMAL )	//AUSTIN slide move is right here!!
+	else if ( Flying != FLY_NORMAL )
 	{
 		if ( (pm->watertype & CONTENTS_LADDER) || pm->waterlevel <= 1 ) 
 		{
@@ -1064,100 +1050,8 @@ qboolean PM_GentCantJump( gentity_t *gent )
 	return qfalse;
 }
 
-// MEDGE addition
-int lastValidTimeMilliForRun = 0;
-int lastValidTimeSecForRun = 0;
-int wallRunStartTime = 0;
-qboolean isWallRunning = qfalse;
-
 static qboolean PM_CheckJump( void ) 
 {
-	// ----- MEDGE MOVEMENT -----
-	// Posto : Idea, log every anim and current state on the console
-	if (g_MEDGEDebug->integer > 1 && pm->gent->client->ps.clientNum == 0)
-	{
-		// Buffer so that we can print once at the end
-		std::string debugBuffer = "PM_CheckJump : ";
-		int somethingHappened = 0;
-
-		// Plane movement N-E-S-W
-		if (pm->cmd.forwardmove || pm->cmd.rightmove) {
-			if (pm->cmd.rightmove == 0 && pm->cmd.forwardmove > 0) {
-				if (lastMovementDirDebug != 0) debugBuffer += "Forward";
-				//lastMovementDirDebug = 0;
-			}
-			else if (pm->cmd.rightmove < 0 && pm->cmd.forwardmove > 0) {
-				if (lastMovementDirDebug != 1) debugBuffer += "Forward + Left";
-				//lastMovementDirDebug = 1;
-			}
-			else if (pm->cmd.rightmove < 0 && pm->cmd.forwardmove == 0) {
-				if (lastMovementDirDebug != 2) debugBuffer += "Left";
-				//lastMovementDirDebug = 2;
-			}
-			else if (pm->cmd.rightmove < 0 && pm->cmd.forwardmove < 0) {
-				if (lastMovementDirDebug != 3) debugBuffer += "Backward + Left";
-				//lastMovementDirDebug = 3;
-			}
-			else if (pm->cmd.rightmove == 0 && pm->cmd.forwardmove < 0) {
-				if (lastMovementDirDebug != 4) debugBuffer += "Backward";
-				//lastMovementDirDebug = 4;
-			}
-			else if (pm->cmd.rightmove > 0 && pm->cmd.forwardmove < 0) {
-				if (lastMovementDirDebug != 5) debugBuffer += "Backward + Right";
-				//lastMovementDirDebug = 5;
-			}
-			else if (pm->cmd.rightmove > 0 && pm->cmd.forwardmove == 0) {
-				if (lastMovementDirDebug != 6) debugBuffer += "Right";
-				//lastMovementDirDebug = 6;
-			}
-			else if (pm->cmd.rightmove > 0 && pm->cmd.forwardmove > 0) {
-				if (lastMovementDirDebug != 7) debugBuffer += "Forward + Right";
-				//lastMovementDirDebug = 7;
-			}
-			somethingHappened = 1;
-		}
-
-		// Jump movement
-		if (somethingHappened)
-			debugBuffer += " ; ";
-		if (pm->cmd.upmove)
-		{
-			if (pm->cmd.upmove > 0) debugBuffer += "Jumping";
-			else debugBuffer += "Crouching";
-			somethingHappened = 1;
-		}
-
-		// Print on console
-		debugBuffer += "\n";
-		if (somethingHappened)
-			gi.Printf(debugBuffer.c_str());
-	}
-
-	// AUSTIN Reset air-kick when on the ground
-	if (pm->ps->groundEntityNum != ENTITYNUM_NONE)
-	{
-		pm->ps->pm_flags &= ~PMF_AIR_KICK_USED;
-	}
-	/*
-	// If already in wall-run, pressing jump again should bounce off
-	if (PM_InSpecialJump(pm->ps->legsAnim)) {
-		if (pm->cmd.upmove > 0) {
-			// Convert wall-run to rebound depending on side
-			int anim = BOTH_FORCEWALLREBOUND_FORWARD;
-			if (pm->ps->legsAnim == BOTH_WALL_RUN_RIGHT) {
-				anim = BOTH_FORCEWALLREBOUND_RIGHT;
-			}
-			else if (pm->ps->legsAnim == BOTH_WALL_RUN_LEFT) {
-				anim = BOTH_FORCEWALLREBOUND_LEFT;
-			}
-
-			PM_GrabWallForJump(anim);
-			return qtrue;
-		}
-	}
-	*/
-	// ----- MEDGE MOVEMENT -----
-
 	//Don't allow jump until all buttons are up
 	if ( pm->ps->pm_flags & PMF_RESPAWNED ) {
 		return qfalse;		
@@ -1209,7 +1103,7 @@ static qboolean PM_CheckJump( void )
 			*/
 		}
 	}
-	else if ( pm->waterlevel < 3 )//|| (pm->ps->waterHeightLevel==WHL_SHOULDERS&&pm->cmd.upmove>0) ) //AUSTIN long jump here. (force speed + jump)
+	else if ( pm->waterlevel < 3 )//|| (pm->ps->waterHeightLevel==WHL_SHOULDERS&&pm->cmd.upmove>0) ) 
 	{
 		if ( pm->ps->gravity > 0 )
 		{//can't do this in zero-G
@@ -1243,7 +1137,7 @@ static qboolean PM_CheckJump( void )
 					return qtrue;
 				}
 				else
-				{//landing-slide	//AUSTIN slide animation touched on here
+				{//landing-slide
 					if ( pm->ps->legsAnim == BOTH_FORCELONGLEAP_START 
 						|| pm->ps->legsAnim == BOTH_FORCELONGLEAP_ATTACK )
 					{//still in start anim, but it's run out
@@ -1575,7 +1469,7 @@ static qboolean PM_CheckJump( void )
 	}
 	else if ( pm->cmd.upmove > 0 //want to jump
 		&& pm->waterlevel < 2 //not in water above ankles
-		&& pm->ps->forcePowerLevel[FP_LEVITATION] >= FORCE_LEVEL_0 //have force jump ability	//AUSTIN I changed this!! ; Posto : Original is > not >=
+		&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_0 //have force jump ability
 		&& !(pm->ps->pm_flags&PMF_JUMP_HELD)//not holding jump from a previous jump
 		//&& !PM_InKnockDown( pm->ps )//not in a knockdown
 		&& pm->ps->forceRageRecoveryTime < pm->cmd.serverTime	//not in a force Rage recovery period
@@ -1607,7 +1501,7 @@ static qboolean PM_CheckJump( void )
 						&& pm->ps->weapon == WP_SABER )
 					{
 						if ( (pm->ps->clientNum >= MAX_CLIENTS&&!PM_ControlledByPlayer())
-							|| pm->ps->forcePowerLevel[FP_LEVITATION] >= FORCE_LEVEL_0) //AUSTIN I changed this
+							|| pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_2 ) 
 						{
 							anim = BOTH_BUTTERFLY_RIGHT;
 							forcePowerCostOverride = G_CostForSpecialMove( SABER_ALT_ATTACK_POWER_LR );
@@ -1687,15 +1581,13 @@ static qboolean PM_CheckJump( void )
 					}
 				}
 			}
-			else if (pm->cmd.rightmove > 0 && pm->ps->forcePowerLevel[FP_LEVITATION] >= FORCE_LEVEL_0)	//AUSTIN I changed this to include force level 0. It used to say > FORCE_LEVEL_1
+			else if ( pm->cmd.rightmove > 0 && pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1 )
 			{//strafing right
 				if ( pm->cmd.forwardmove > 0 )
 				{//wall-run
 					if ( !(pm->ps->saber[0].saberFlags&SFL_NO_WALL_RUNS)
 						&& (!pm->ps->dualSabers || !(pm->ps->saber[1].saberFlags&SFL_NO_WALL_RUNS)) )
 					{//okay to do wall-runs with this saber
-						if (g_MEDGEDebug->integer)
-							gi.Printf(S_COLOR_RED"anim = BOTH_WALL_RUN_RIGHT\n");
 						vertPush = forceJumpStrength[FORCE_LEVEL_2]/2.0f;
 						anim = BOTH_WALL_RUN_RIGHT;
 					}
@@ -1705,22 +1597,18 @@ static qboolean PM_CheckJump( void )
 					if ( !(pm->ps->saber[0].saberFlags&SFL_NO_WALL_FLIPS)
 						&& (!pm->ps->dualSabers || !(pm->ps->saber[1].saberFlags&SFL_NO_WALL_FLIPS)) )
 					{//okay to do wall-flips with this saber
-						if (g_MEDGEDebug->integer)
-							gi.Printf(S_COLOR_RED"anim = BOTH_WALL_FLIP_RIGHT\n");
 						vertPush = forceJumpStrength[FORCE_LEVEL_2]/2.25f;
 						anim = BOTH_WALL_FLIP_RIGHT;
 					}
 				}
 			}
-			else if ( pm->cmd.rightmove < 0 && pm->ps->forcePowerLevel[FP_LEVITATION] >= FORCE_LEVEL_0 )	//AUSTIN I changed this to include force level 0. It used to say > FORCE_LEVEL_1
+			else if ( pm->cmd.rightmove < 0 && pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1 )
 			{//strafing left
 				if ( pm->cmd.forwardmove > 0 )
 				{//wall-run
 					if ( !(pm->ps->saber[0].saberFlags&SFL_NO_WALL_RUNS)
 						&& (!pm->ps->dualSabers || !(pm->ps->saber[1].saberFlags&SFL_NO_WALL_RUNS)) )
 					{//okay to do wall-runs with this saber
-						if (g_MEDGEDebug->integer)
-							gi.Printf(S_COLOR_RED"anim = BOTH_WALL_RUN_LEFT\n");
 						vertPush = forceJumpStrength[FORCE_LEVEL_2]/2.0f;
 						anim = BOTH_WALL_RUN_LEFT;
 					}
@@ -1730,8 +1618,6 @@ static qboolean PM_CheckJump( void )
 					if ( !(pm->ps->saber[0].saberFlags&SFL_NO_WALL_FLIPS)
 						&& (!pm->ps->dualSabers || !(pm->ps->saber[1].saberFlags&SFL_NO_WALL_FLIPS)) )
 					{//okay to do wall-flips with this saber
-						if (g_MEDGEDebug->integer)
-							gi.Printf(S_COLOR_RED"anim = BOTH_WALL_FLIP_LEFT\n");
 						vertPush = forceJumpStrength[FORCE_LEVEL_2]/2.25f;
 						anim = BOTH_WALL_FLIP_LEFT;
 					}
@@ -1740,7 +1626,7 @@ static qboolean PM_CheckJump( void )
 			else if ( /*pm->ps->clientNum >= MAX_CLIENTS//not the player
 				&& !PM_ControlledByPlayer() //not controlled by player
 				&&*/ pm->cmd.forwardmove > 0 //pushing forward
-				&& pm->ps->forcePowerLevel[FP_LEVITATION] >= FORCE_LEVEL_0)//have jump 2 or higher	//AUSTIN I changed this!! ; Posto : Original is > FP1
+				&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1 )//have jump 2 or higher
 			{//step off wall, flip backwards
 				if ( VectorLengthSquared( pm->ps->velocity ) > 40000 /*200*200*/)
 				{//have to be moving... FIXME: make sure it's opposite the wall... or at least forward?
@@ -1749,8 +1635,6 @@ static qboolean PM_CheckJump( void )
 						if ( !(pm->ps->saber[0].saberFlags&SFL_NO_WALL_RUNS)
 							&& (!pm->ps->dualSabers || !(pm->ps->saber[1].saberFlags&SFL_NO_WALL_RUNS)) )
 						{//okay to do wall-runs with this saber
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"Wall Run Flip Start\n");
 							vertPush = forceJumpStrength[FORCE_LEVEL_2]/2.0f;
 							anim = BOTH_FORCEWALLRUNFLIP_START;
 						}
@@ -1760,8 +1644,6 @@ static qboolean PM_CheckJump( void )
 						if ( !(pm->ps->saber[0].saberFlags&SFL_NO_WALL_FLIPS)
 							&& (!pm->ps->dualSabers || !(pm->ps->saber[1].saberFlags&SFL_NO_WALL_FLIPS)) )
 						{//okay to do wall-flips with this saber
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"Wall Flip Back\n");
 							vertPush = forceJumpStrength[FORCE_LEVEL_2]/2.25f;
 							anim = BOTH_WALL_FLIP_BACK1;
 						}
@@ -1908,25 +1790,6 @@ static qboolean PM_CheckJump( void )
 					break;
 				}
 
-				if (anim == BOTH_WALL_RUN_LEFT || anim == BOTH_WALL_RUN_RIGHT) {
-					if (!isWallRunning) {
-						// Wall run just started
-						wallRunStartTime = level.time; // or pm->cmd.serverTime
-						isWallRunning = qtrue;
-						if (g_MEDGEDebug->integer) {
-							gi.Printf(S_COLOR_CYAN"Wall run started at time (on ground): %i\n", wallRunStartTime);
-						}
-					}
-				}
-				else
-				{
-					if (g_MEDGEDebug->integer) {
-						gi.Printf(S_COLOR_CYAN"NO WALL RUN started at time (on ground): %i\n", wallRunStartTime);
-					}
-					wallRunStartTime = 0;
-					isWallRunning = qfalse;
-				}
-
 				vec3_t	idealNormal={0}, wallNormal={0};
 				if ( doTrace )
 				{
@@ -2039,104 +1902,47 @@ static qboolean PM_CheckJump( void )
 							&& anim != BOTH_WALL_RUN_RIGHT
 							&& anim != BOTH_FORCEWALLRUNFLIP_START) 
 						|| (wallNormal[2] >= 0.0f && wallNormal[2] <= MAX_WALL_RUN_Z_NORMAL) )
-					{//wall-runs can only run on relatively flat walls, sorry. //AUSTIN wall run slope check. Might want to change this later
+					{//wall-runs can only run on relatively flat walls, sorry. 
 						if ( anim == BOTH_ARIAL_LEFT || anim == BOTH_CARTWHEEL_LEFT ) 
 						{
 							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
 							VectorMA( pm->ps->velocity, -185, right, pm->ps->velocity );
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"BOTH_ARIAL_LEFT || BOTH_CARTWHEEL_LEFT\n");
-
-						} //AUSTIN changed from -185
+						}
 						else if ( anim == BOTH_ARIAL_RIGHT || anim == BOTH_CARTWHEEL_RIGHT ) 
 						{
 							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
 							VectorMA( pm->ps->velocity, 185, right, pm->ps->velocity );
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"BOTH_ARIAL_RIGHT || BOTH_CARTWHEEL_RIGHT\n");
-						} //AUSTIN changed from 185
+						}
 						else if ( anim == BOTH_BUTTERFLY_LEFT )
 						{
 							pm->ps->velocity[0] = pm->ps->velocity[1] = 0; 
 							VectorMA( pm->ps->velocity, -190, right, pm->ps->velocity );
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"BOTH_BUTTERFLY_LEFT\n");
-						} //AUSTIN changed from -190
+						}
 						else if ( anim == BOTH_BUTTERFLY_RIGHT )
 						{
 							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
 							VectorMA( pm->ps->velocity, 190, right, pm->ps->velocity );
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"BOTH_BUTTERFLY_RIGHT\n");
-						} //AUSTIN changed from 190
+						}
 						//move me to side
-						else if (anim == BOTH_WALL_FLIP_LEFT)
+						else if ( anim == BOTH_WALL_FLIP_LEFT )
 						{
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"BOTH_WALL_FLIP_LEFT\n");
 							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
-
-							// Check the Force level and adjust the speed accordingly
-							if (pm->ps->forcePowerLevel[FORCE_LEVEL_1] == FORCE_LEVEL_1)
-							{
-								// Apply 500 speed in the opposite direction of the wall for Force Level 1
-								VectorMA(pm->ps->velocity, 300, right, pm->ps->velocity);
-							}
-							else if (pm->ps->forcePowerLevel[FORCE_LEVEL_2] == FORCE_LEVEL_2)
-							{
-								// Apply 500 speed in the opposite direction of the wall for Force Level 2
-								VectorMA(pm->ps->velocity, 300, right, pm->ps->velocity);
-							}
-							else if (pm->ps->forcePowerLevel[FORCE_LEVEL_3] == FORCE_LEVEL_3)
-							{
-								// Apply 700 speed in the opposite direction of the wall for Force Level 3
-								VectorMA(pm->ps->velocity, 300, right, pm->ps->velocity);
-							}
-							else
-							{
-								// Default boost if no Force level is active
-								VectorMA(pm->ps->velocity, 300, right, pm->ps->velocity);  // Default value of 500 when no Force level is used
-							}
+							VectorMA( pm->ps->velocity, 150, right, pm->ps->velocity );
 						}
-						else if (anim == BOTH_WALL_FLIP_RIGHT)
+						else if ( anim == BOTH_WALL_FLIP_RIGHT )
 						{
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"BOTH_WALL_FLIP_RIGHT\n");
 							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
-
-							// Check the Force level and adjust the speed accordingly
-							if (pm->ps->forcePowerLevel[FORCE_LEVEL_1] == FORCE_LEVEL_1)
-							{
-								// Apply -500 speed in the opposite direction of the wall for Force Level 2
-								VectorMA(pm->ps->velocity, -300, right, pm->ps->velocity);
-							}
-							else if (pm->ps->forcePowerLevel[FORCE_LEVEL_2] == FORCE_LEVEL_2)
-							{
-								// Apply -700 speed in the opposite direction of the wall for Force Level 2
-								VectorMA(pm->ps->velocity, -300, right, pm->ps->velocity);
-							}
-							else if (pm->ps->forcePowerLevel[FORCE_LEVEL_3] == FORCE_LEVEL_3)
-							{
-								// Apply -700 speed in the opposite direction of the wall for Force Level 3
-								VectorMA(pm->ps->velocity, -300, right, pm->ps->velocity);
-							}
-							else
-							{
-								// Default boost if no Force level is active
-								VectorMA(pm->ps->velocity, -300, right, pm->ps->velocity);  // Default value of -500 when no Force level is used
-							}
+							VectorMA( pm->ps->velocity, -150, right, pm->ps->velocity );
 						}
-						else if ( anim == BOTH_FLIP_BACK1
+						else if ( anim == BOTH_FLIP_BACK1 
 							|| anim == BOTH_FLIP_BACK2 
 							|| anim == BOTH_FLIP_BACK3 
 							|| anim == BOTH_ALORA_FLIP_B
 							|| anim == BOTH_WALL_FLIP_BACK1 )
 						{
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"BOTH_FLIP_BACK1-2-3 || BOTH_ALORA_FLIP_B || BOTH_WALL_FLIP_BACK1\n");
 							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
-							VectorMA( pm->ps->velocity, -400, fwd, pm->ps->velocity );
-						} //AUSTIN I changed the number in the above line from -150
+							VectorMA( pm->ps->velocity, -150, fwd, pm->ps->velocity );
+						}
 						//kick if jumping off an ent
 						if ( doTrace 
 							&& anim != BOTH_WALL_RUN_LEFT 
@@ -2233,455 +2039,6 @@ static qboolean PM_CheckJump( void )
 		else 
 		{//in the air
 			int legsAnim = pm->ps->legsAnim;
-			int localAnim = -1;
-			float localVertPush = 0;
-			int	localForcePowerCostOverride = 0;
-
-			// ----------------------------------------------------------------------------------------------------------------------
-			// Posto : make us able to run on a wall from air
-
-			bool authoziredToRun = false;
-#include "../speedrun/speedrun_timer_q3/timer_helper.h"
-			int totalMillisec = cgi_SpeedrunGetTotalTimeMilliseconds();
-			int seconds = GetTimeSecondFromMilliseconds(totalMillisec, 0);
-			int milliseconds = GetTimeMillisecondFromMilliseconds(totalMillisec, 3);
-			bool wallRunStartedThisFrame = false;
-
-			if (pm->ps->clientNum == 0 && seconds != lastValidTimeSecForRun)
-			{
-				//gi.Printf(S_COLOR_CYAN"seconds ; %i , %i\n", lastValidTimeSecForRun, seconds);
-				//lastValidTimeSecForRun = seconds;
-				//lastValidTimeMilliForRun = milliseconds;
-				authoziredToRun = true;
-				wallRunStartedThisFrame = true;
-			}
-
-			if (authoziredToRun)
-			{
-				lastValidTimeSecForRun = seconds;
-				lastValidTimeMilliForRun = milliseconds;
-				if (pm->cmd.rightmove > 0 && pm->ps->forcePowerLevel[FP_LEVITATION] >= FORCE_LEVEL_0)
-				{
-					if (pm->cmd.forwardmove > 0)
-					{
-						if (!(pm->ps->saber[0].saberFlags & SFL_NO_WALL_RUNS)
-							&& (!pm->ps->dualSabers || !(pm->ps->saber[1].saberFlags & SFL_NO_WALL_RUNS)))
-						{
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"anim = BOTH_WALL_RUN_RIGHT - in air !!!\n");
-							localVertPush = forceJumpStrength[FORCE_LEVEL_2] / 2.0f;
-							localAnim = BOTH_WALL_RUN_RIGHT;
-						}
-					}
-					else if (pm->cmd.forwardmove == 0)
-					{
-						if (!(pm->ps->saber[0].saberFlags & SFL_NO_WALL_FLIPS)
-							&& (!pm->ps->dualSabers || !(pm->ps->saber[1].saberFlags & SFL_NO_WALL_FLIPS)))
-						{
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"anim = BOTH_WALL_FLIP_RIGHT - in air !!!\n");
-							localVertPush = forceJumpStrength[FORCE_LEVEL_2] / 2.25f;
-							localAnim = BOTH_WALL_FLIP_RIGHT;
-						}
-					}
-				}
-				else if (pm->cmd.rightmove < 0 && pm->ps->forcePowerLevel[FP_LEVITATION] >= FORCE_LEVEL_0)
-				{
-					if (pm->cmd.forwardmove > 0)
-					{
-						if (!(pm->ps->saber[0].saberFlags & SFL_NO_WALL_RUNS)
-							&& (!pm->ps->dualSabers || !(pm->ps->saber[1].saberFlags & SFL_NO_WALL_RUNS)))
-						{
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"anim = BOTH_WALL_RUN_LEFT - in air !!!\n");
-							localVertPush = forceJumpStrength[FORCE_LEVEL_2] / 2.0f;
-							localAnim = BOTH_WALL_RUN_LEFT;
-						}
-					}
-					else if (pm->cmd.forwardmove == 0)
-					{
-						if (!(pm->ps->saber[0].saberFlags & SFL_NO_WALL_FLIPS)
-							&& (!pm->ps->dualSabers || !(pm->ps->saber[1].saberFlags & SFL_NO_WALL_FLIPS)))
-						{
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"anim = BOTH_WALL_FLIP_LEFT - in air !!!\n");
-							localVertPush = forceJumpStrength[FORCE_LEVEL_2] / 2.25f;
-							localAnim = BOTH_WALL_FLIP_LEFT;
-						}
-					}
-				}
-				authoziredToRun = false;
-			}
-
-			if (localAnim == BOTH_WALL_RUN_LEFT || localAnim == BOTH_WALL_RUN_RIGHT) {
-				if (!isWallRunning) {
-					// Wall run just started
-					wallRunStartTime = level.time; // or pm->cmd.serverTime
-					isWallRunning = qtrue;
-					if (g_MEDGEDebug->integer) {
-						gi.Printf(S_COLOR_CYAN"Wall run started at time: %i\n", wallRunStartTime);
-					}
-				}
-			}
-
-			if (localAnim != -1 && PM_HasAnimation(pm->gent, localAnim))
-			{
-				vec3_t fwd, right, traceto, mins = { pm->mins[0],pm->mins[1],0 }, maxs = { pm->maxs[0],pm->maxs[1],24 }, fwdAngles = { 0, pm->ps->viewangles[YAW], 0 };
-				trace_t	trace;
-				qboolean doTrace = qfalse;
-				int contents = CONTENTS_SOLID;
-
-				AngleVectors(fwdAngles, fwd, right, NULL);
-
-				switch (localAnim)
-				{
-				case BOTH_WALL_FLIP_LEFT:
-					if (g_debugMelee->integer)
-					{
-						contents |= CONTENTS_BODY;
-					}
-				case BOTH_WALL_RUN_LEFT:
-					doTrace = qtrue;
-					VectorMA(pm->ps->origin, -16, right, traceto);
-					break;
-
-				case BOTH_WALL_FLIP_RIGHT:
-					if (g_debugMelee->integer)
-					{
-						contents |= CONTENTS_BODY;
-					}
-				case BOTH_WALL_RUN_RIGHT:
-					doTrace = qtrue;
-					VectorMA(pm->ps->origin, 16, right, traceto);
-					break;
-
-				case BOTH_WALL_FLIP_BACK1:
-					if (g_debugMelee->integer)
-					{
-						contents |= CONTENTS_BODY;
-					}
-					doTrace = qtrue;
-					VectorMA(pm->ps->origin, 32, fwd, traceto);
-					break;
-
-				case BOTH_FORCEWALLRUNFLIP_START:
-					if (g_debugMelee->integer)
-					{
-						contents |= CONTENTS_BODY;
-					}
-					doTrace = qtrue;
-					VectorMA(pm->ps->origin, 32, fwd, traceto);
-					break;
-				}
-
-				vec3_t	idealNormal = { 0 }, wallNormal = { 0 };
-				if (doTrace)
-				{
-					pm->trace(&trace, pm->ps->origin, mins, maxs, traceto, pm->ps->clientNum, contents, (EG2_Collision)0, 0);
-					VectorCopy(trace.plane.normal, wallNormal);
-					VectorNormalize(wallNormal);
-					VectorSubtract(pm->ps->origin, traceto, idealNormal);
-					VectorNormalize(idealNormal);
-					if (localAnim == BOTH_WALL_FLIP_LEFT)
-					{
-						trace_t	trace2;
-						vec3_t	start;
-						VectorMA(pm->ps->origin, 128, right, traceto);
-						pm->trace(&trace2, pm->ps->origin, mins, maxs, traceto, pm->ps->clientNum, contents, (EG2_Collision)0, 0);
-						if (!trace2.allsolid && !trace2.startsolid)
-						{
-							VectorCopy(trace2.endpos, traceto);
-							VectorCopy(traceto, start);
-							traceto[2] -= 384;
-							pm->trace(&trace2, start, mins, maxs, traceto, pm->ps->clientNum, contents, (EG2_Collision)0, 0);
-							if (!trace2.allsolid && !trace2.startsolid && trace2.fraction >= 1.0f)
-							{
-								trace.fraction = 1.0f;
-							}
-						}
-					}
-					else if (localAnim == BOTH_WALL_FLIP_RIGHT)
-					{
-						trace_t	trace2;
-						vec3_t	start;
-						VectorMA(pm->ps->origin, -128, right, traceto);
-						pm->trace(&trace2, pm->ps->origin, mins, maxs, traceto, pm->ps->clientNum, contents, (EG2_Collision)0, 0);
-						if (!trace2.allsolid && !trace2.startsolid)
-						{
-							VectorCopy(trace2.endpos, traceto);
-							VectorCopy(traceto, start);
-							traceto[2] -= 384;
-							pm->trace(&trace2, start, mins, maxs, traceto, pm->ps->clientNum, contents, (EG2_Collision)0, 0);
-							if (!trace2.allsolid && !trace2.startsolid && trace2.fraction >= 1.0f)
-							{
-								trace.fraction = 1.0f;
-							}
-						}
-					}
-					else
-					{
-						if (localAnim == BOTH_WALL_FLIP_BACK1
-							|| localAnim == BOTH_FORCEWALLRUNFLIP_START)
-						{
-							if ((contents & CONTENTS_BODY)
-								&& (trace.contents & CONTENTS_BODY) 
-								&& g_entities[trace.entityNum].client)
-							{
-								if (PM_InOnGroundAnim(&g_entities[trace.entityNum].client->ps))
-								{
-									trace.fraction = 1.0f;
-								}
-								else if (localAnim == BOTH_FORCEWALLRUNFLIP_START)
-								{
-									localAnim = BOTH_WALL_FLIP_BACK1;
-									localVertPush = forceJumpStrength[FORCE_LEVEL_2] / 2.25f;
-								}
-							}
-							else if (localAnim == BOTH_WALL_FLIP_BACK1)
-							{
-								trace_t	trace2;
-								vec3_t	start;
-								VectorCopy(pm->ps->origin, start);
-								start[2] += 64;
-								VectorMA(start, 32, fwd, traceto);
-								pm->trace(&trace2, start, mins, maxs, traceto, pm->ps->clientNum, contents, (EG2_Collision)0, 0);
-								if (trace2.allsolid
-									|| trace2.startsolid
-									|| trace2.fraction >= 1.0f)
-								{
-									trace.fraction = 1.0f;
-								}
-							}
-						}
-						if (trace.fraction < 1.0f)
-						{
-							if (localAnim == BOTH_WALL_FLIP_BACK1)
-							{
-								trace_t	trace2;
-								vec3_t	start;
-								VectorMA(pm->ps->origin, -128, fwd, traceto);
-								pm->trace(&trace2, pm->ps->origin, mins, maxs, traceto, pm->ps->clientNum, contents, (EG2_Collision)0, 0);
-								if (!trace2.allsolid && !trace2.startsolid)
-								{
-									VectorCopy(trace2.endpos, traceto);
-									VectorCopy(traceto, start);
-									traceto[2] -= 384;
-									pm->trace(&trace2, start, mins, maxs, traceto, pm->ps->clientNum, contents, (EG2_Collision)0, 0);
-									if (!trace2.allsolid && !trace2.startsolid && trace2.fraction >= 1.0f)
-									{//bottomless pit!
-										trace.fraction = 1.0f;
-									}
-								}
-							}
-						}
-					}
-				}
-				gentity_t* traceEnt = &g_entities[trace.entityNum];
-
-				
-				if (!doTrace || (trace.fraction < 1.0f && ((trace.entityNum < ENTITYNUM_WORLD && traceEnt && traceEnt->s.solid != SOLID_BMODEL) || DotProduct(wallNormal, idealNormal) > 0.7)))
-				{
-					if ((localAnim != BOTH_WALL_RUN_LEFT
-						&& localAnim != BOTH_WALL_RUN_RIGHT
-						&& localAnim != BOTH_FORCEWALLRUNFLIP_START)
-						|| (wallNormal[2] >= 0.0f && wallNormal[2] <= MAX_WALL_RUN_Z_NORMAL))
-					{
-						if (localAnim == BOTH_ARIAL_LEFT || localAnim == BOTH_CARTWHEEL_LEFT)
-						{
-							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
-							VectorMA(pm->ps->velocity, -185, right, pm->ps->velocity);
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"BOTH_ARIAL_LEFT || BOTH_CARTWHEEL_LEFT ; in air !!!\n");
-				
-						}
-						else if (localAnim == BOTH_ARIAL_RIGHT || localAnim == BOTH_CARTWHEEL_RIGHT)
-						{
-							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
-							VectorMA(pm->ps->velocity, 185, right, pm->ps->velocity);
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"BOTH_ARIAL_RIGHT || BOTH_CARTWHEEL_RIGHT ; in air !!!\n");
-						}
-						else if (localAnim == BOTH_BUTTERFLY_LEFT)
-						{
-							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
-							VectorMA(pm->ps->velocity, -190, right, pm->ps->velocity);
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"BOTH_BUTTERFLY_LEFT ; in air !!!\n");
-						}
-						else if (localAnim == BOTH_BUTTERFLY_RIGHT)
-						{
-							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
-							VectorMA(pm->ps->velocity, 190, right, pm->ps->velocity);
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"BOTH_BUTTERFLY_RIGHT ; in air !!!\n");
-						}
-						
-						// -----
-
-						else if (localAnim == BOTH_WALL_FLIP_LEFT)
-						{
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"local anim = BOTH_WALL_FLIP_LEFT ; in air !!!\n");
-							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
-						
-							// Check the Force level and adjust the speed accordingly
-							if (pm->ps->forcePowerLevel[FORCE_LEVEL_1] == FORCE_LEVEL_1)
-							{
-								// Apply 500 speed in the opposite direction of the wall for Force Level 1
-								VectorMA(pm->ps->velocity, 100, right, pm->ps->velocity);
-							}
-							else if (pm->ps->forcePowerLevel[FORCE_LEVEL_2] == FORCE_LEVEL_2)
-							{
-								// Apply 500 speed in the opposite direction of the wall for Force Level 2
-								VectorMA(pm->ps->velocity, 100, right, pm->ps->velocity);
-							}
-							else if (pm->ps->forcePowerLevel[FORCE_LEVEL_3] == FORCE_LEVEL_3)
-							{
-								// Apply 700 speed in the opposite direction of the wall for Force Level 3
-								VectorMA(pm->ps->velocity, 100, right, pm->ps->velocity);
-							}
-							else
-							{
-								// Default boost if no Force level is active
-								VectorMA(pm->ps->velocity, 100, right, pm->ps->velocity);  // Default value of 500 when no Force level is used
-							}
-						}
-						else if (localAnim == BOTH_WALL_FLIP_RIGHT)
-						{
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"local anim = BOTH_WALL_FLIP_RIGHT ; in air !!!\n");
-							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
-						
-							// Check the Force level and adjust the speed accordingly
-							if (pm->ps->forcePowerLevel[FORCE_LEVEL_1] == FORCE_LEVEL_1)
-							{
-								// Apply -500 speed in the opposite direction of the wall for Force Level 2
-								VectorMA(pm->ps->velocity, -100, right, pm->ps->velocity);
-							}
-							else if (pm->ps->forcePowerLevel[FORCE_LEVEL_2] == FORCE_LEVEL_2)
-							{
-								// Apply -700 speed in the opposite direction of the wall for Force Level 2
-								VectorMA(pm->ps->velocity, -100, right, pm->ps->velocity);
-							}
-							else if (pm->ps->forcePowerLevel[FORCE_LEVEL_3] == FORCE_LEVEL_3)
-							{
-								// Apply -700 speed in the opposite direction of the wall for Force Level 3
-								VectorMA(pm->ps->velocity, -100, right, pm->ps->velocity);
-							}
-							else
-							{
-								// Default boost if no Force level is active
-								VectorMA(pm->ps->velocity, -100, right, pm->ps->velocity);  // Default value of -500 when no Force level is used
-							}
-						}
-
-						
-						// -----
-						
-						else if (localAnim == BOTH_FLIP_BACK1
-							|| localAnim == BOTH_FLIP_BACK2
-							|| localAnim == BOTH_FLIP_BACK3
-							|| localAnim == BOTH_ALORA_FLIP_B
-							|| localAnim == BOTH_WALL_FLIP_BACK1)
-						{
-							if (g_MEDGEDebug->integer)
-								gi.Printf(S_COLOR_RED"BOTH_FLIP_BACK1-2-3 || BOTH_ALORA_FLIP_B || BOTH_WALL_FLIP_BACK1 ; in air !!!\n");
-							pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
-							VectorMA(pm->ps->velocity, -400, fwd, pm->ps->velocity);
-						}
-						/*
-						if (doTrace
-							&& localAnim != BOTH_WALL_RUN_LEFT
-							&& localAnim != BOTH_WALL_RUN_RIGHT
-							&& localAnim != BOTH_FORCEWALLRUNFLIP_START)
-						{
-							if (pm->gent && trace.entityNum < ENTITYNUM_WORLD)
-							{
-								if (traceEnt
-									&& traceEnt->client
-									&& traceEnt->health > 0
-									&& traceEnt->takedamage
-									&& traceEnt->client->NPC_class != CLASS_GALAKMECH
-									&& traceEnt->client->NPC_class != CLASS_DESANN
-									&& !(traceEnt->flags & FL_NO_KNOCKBACK))
-								{
-									vec3_t oppDir, fxDir;
-									float strength = VectorNormalize2(pm->ps->velocity, oppDir);
-									VectorScale(oppDir, -1, oppDir);
-									G_Damage(traceEnt, pm->gent, pm->gent, oppDir, traceEnt->currentOrigin, 10, DAMAGE_NO_ARMOR | DAMAGE_NO_HIT_LOC | DAMAGE_NO_KNOCKBACK, MOD_MELEE);
-									VectorCopy(fwd, fxDir);
-									VectorScale(fxDir, -1, fxDir);
-									G_PlayEffect(G_EffectIndex("melee/kick_impact"), trace.endpos, fxDir);
-									if (traceEnt->health > 0)
-									{
-										if ((traceEnt->s.number == 0 && !Q_irand(0, g_spskill->integer))
-											|| (traceEnt->NPC != NULL && Q_irand(RANK_CIVILIAN, traceEnt->NPC->rank) + Q_irand(-2, 2) < RANK_ENSIGN))
-										{
-											NPC_SetAnim(traceEnt, SETANIM_BOTH, BOTH_KNOCKDOWN2, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-											G_Throw(traceEnt, oppDir, strength);
-										}
-									}
-								}
-							}
-						}
-						*/
-						//up
-						if (localVertPush)
-						{
-							pm->ps->velocity[2] = localVertPush;
-						}
-						//animate me
-						if (localAnim == BOTH_BUTTERFLY_RIGHT)
-						{
-							PM_SetSaberMove(LS_BUTTERFLY_RIGHT);
-						}
-						else if (localAnim == BOTH_BUTTERFLY_LEFT)
-						{
-							PM_SetSaberMove(LS_BUTTERFLY_LEFT);
-						}
-						else
-						{
-							int parts = SETANIM_LEGS;
-							if ( /*anim == BOTH_BUTTERFLY_LEFT ||
-								anim == BOTH_BUTTERFLY_RIGHT ||*/
-								localAnim == BOTH_FJSS_TR_BL ||
-								localAnim == BOTH_FJSS_TL_BR)
-							{
-								parts = SETANIM_BOTH;
-								pm->cmd.buttons &= ~BUTTON_ATTACK;
-								pm->ps->saberMove = LS_NONE;
-								pm->gent->client->ps.SaberActivateTrail(300);
-							}
-							else if (!pm->ps->weaponTime)
-							{
-								parts = SETANIM_BOTH;
-							}
-							PM_SetAnim(pm, parts, localAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
-							if ( /*anim == BOTH_BUTTERFLY_LEFT
-								|| anim == BOTH_BUTTERFLY_RIGHT
-								||*/ localAnim == BOTH_FJSS_TR_BL
-								|| localAnim == BOTH_FJSS_TL_BR
-								|| localAnim == BOTH_FORCEWALLRUNFLIP_START)
-							{
-								pm->ps->weaponTime = pm->ps->torsoAnimTimer;
-							}
-							else if (localAnim == BOTH_WALL_FLIP_LEFT
-								|| localAnim == BOTH_WALL_FLIP_RIGHT
-								|| localAnim == BOTH_WALL_FLIP_BACK1)
-							{//let us do some more moves after this
-								pm->ps->saberAttackChainCount = 0;
-							}
-						}
-						pm->ps->forceJumpZStart = pm->ps->origin[2];//so we don't take damage if we land at same height
-						pm->ps->pm_flags |= (PMF_JUMPING | PMF_SLOW_MO_FALL);
-						pm->cmd.upmove = 0;
-						G_SoundOnEnt(pm->gent, CHAN_BODY, "sound/weapons/force/jump.wav");
-						WP_ForcePowerDrain(pm->gent, FP_LEVITATION, localForcePowerCostOverride);
-					}
-				}
-			}
-
-			// ----------------------------------------------------------------------------------------------------------------------
 
 			if ( legsAnim == BOTH_WALL_RUN_LEFT || legsAnim == BOTH_WALL_RUN_RIGHT )
 			{//running on a wall
@@ -2693,10 +2050,10 @@ static qboolean PM_CheckJump( void )
 
 				if ( legsAnim == BOTH_WALL_RUN_LEFT )
 				{
-					if ( pm->ps->legsAnimTimer > 1 ) //AUSTIN changed from 400
+					if ( pm->ps->legsAnimTimer > 400 )
 					{//not at the end of the anim
 						float animLen = PM_AnimLength( pm->gent->client->clientInfo.animFileIndex, BOTH_WALL_RUN_LEFT );
-						if ( pm->ps->legsAnimTimer < animLen - 1 ) //AUSTIN changed from 400
+						if ( pm->ps->legsAnimTimer < animLen - 400 )
 						{//not at start of anim
 							VectorMA( pm->ps->origin, -16, right, traceto );
 							anim = BOTH_WALL_RUN_LEFT_FLIP;
@@ -2705,118 +2062,39 @@ static qboolean PM_CheckJump( void )
 				}
 				else if ( legsAnim == BOTH_WALL_RUN_RIGHT )
 				{
-					if ( pm->ps->legsAnimTimer > 1 ) //AUSTIN changed from 400
+					if ( pm->ps->legsAnimTimer > 400 )
 					{//not at the end of the anim
 						float animLen = PM_AnimLength( pm->gent->client->clientInfo.animFileIndex, BOTH_WALL_RUN_RIGHT );
-						if ( pm->ps->legsAnimTimer < animLen - 1 ) //AUSTIN changed from 400
+						if ( pm->ps->legsAnimTimer < animLen - 400 )
 						{//not at start of anim
 							VectorMA( pm->ps->origin, 16, right, traceto );
 							anim = BOTH_WALL_RUN_RIGHT_FLIP;
 						}
 					}
 				}
-
-				
-				bool authoziredToBounce = false;
-				// Timer to NOT boost instantly when wall running in air
-				int currentSecondForBounce = GetTimeSecondFromMilliseconds(totalMillisec, 0);
-				int currentMillisecondsForBounce = GetTimeMillisecondFromMilliseconds(totalMillisec, 3);
-				// Wait 150ms before authorization
-				/*
-				if (currentSecondForBounce != seconds
-					&& abs(currentMillisecondsForBounce - lastValidTimeMilliForRun) <= 150
-					&& abs(lastValidTimeMilliForRun - (currentMillisecondsForBounce + 1000)) <= 150)
+				if ( anim != -1 )
 				{
-					gi.Printf(S_COLOR_GREEN"authoziredToBounce = true ; %i , %i\n", currentSecondForBounce, seconds);
-					authoziredToBounce = true;
-				}
-				*/
-
-				qboolean canBoost = false;
-
-				if (anim != -1 && isWallRunning) {
-					int timeSinceWallRunStart = level.time - wallRunStartTime;
-					canBoost = (timeSinceWallRunStart >= 150); // 150ms delay
-					if (canBoost)
-					{
-						if (g_MEDGEDebug->integer)
+					pm->trace( &trace, pm->ps->origin, mins, maxs, traceto, pm->ps->clientNum, CONTENTS_SOLID|CONTENTS_BODY, (EG2_Collision)0, 0 );
+					if ( trace.fraction < 1.0f )
+					{//flip off wall
+						if ( anim == BOTH_WALL_RUN_LEFT_FLIP )
 						{
-							gi.Printf(S_COLOR_GREEN"Wall boost authorized after %ims\n", timeSinceWallRunStart);
+							pm->ps->velocity[0] *= 0.5f;
+							pm->ps->velocity[1] *= 0.5f;
+							VectorMA( pm->ps->velocity, 150, right, pm->ps->velocity );
 						}
-					}
-				}
-				
-				//if (anim != -1 && !wallRunStartedThisFrame && authoziredToBounce) //authoziredToBounce) // AUSTIN WALL BOOST
-				if (canBoost)
-				{
-					authoziredToBounce = false;
-					wallRunStartedThisFrame = false;
-
-					pm->trace(&trace, pm->ps->origin, mins, maxs, traceto, pm->ps->clientNum, CONTENTS_SOLID | CONTENTS_BODY, (EG2_Collision)0, 0);
-					if (trace.fraction < 1.0f)
-					{
-						// Get current horizontal speed (ignore vertical velocity for this calculation)
-						vec3_t horizontalVel;
-						VectorCopy(pm->ps->velocity, horizontalVel);
-						horizontalVel[2] = 0; // Remove vertical component
-						float currentSpeed = VectorLength(horizontalVel);
-
-						// Get direction vectors
-						vec3_t forward, right;
-						AngleVectors(pm->ps->viewangles, forward, right, NULL);
-						forward[2] = 0; // zero vertical component
-						VectorNormalize(forward);
-
-						// Calculate base new velocity (preserving current speed in new direction)
-						vec3_t newVelocity;
-						VectorScale(forward, currentSpeed, newVelocity);
-
-						float speedBoost = g_wallBoostSpeed->value;	//AUSTIN wall boost speed added here
-						VectorMA(newVelocity, speedBoost, forward, newVelocity);
-
-						// Push away from wall (sideways force)
-						float wallPushForce = 50; // Posto : was 150, need to tune down
-						if (anim == BOTH_WALL_RUN_LEFT_FLIP) {
-							//if (authoziredToBounce)
-							{
-								if (g_MEDGEDebug->integer)
-									gi.Printf(S_COLOR_YELLOW"MEDGE : jumping left from wall\n");
-								VectorMA(newVelocity, wallPushForce, right, newVelocity);
-								//authoziredToBounce = false;
-							}
+						else if ( anim == BOTH_WALL_RUN_RIGHT_FLIP )
+						{
+							pm->ps->velocity[0] *= 0.5f;
+							pm->ps->velocity[1] *= 0.5f;
+							VectorMA( pm->ps->velocity, -150, right, pm->ps->velocity );
 						}
-						else if (anim == BOTH_WALL_RUN_RIGHT_FLIP) {
-							//if (authoziredToBounce)
-							{
-								if (g_MEDGEDebug->integer)
-									gi.Printf(S_COLOR_YELLOW"MEDGE : jumping right from wall\n");
-								VectorMA(newVelocity, -wallPushForce, right, newVelocity);
-								//authoziredToBounce = false;
-							}
-						}
-						// RESET MY COUNTERS
-						isWallRunning = qfalse;
-						wallRunStartTime = 0;
-
-						// Preserve existing vertical velocity (for jumping/falling)
-						pm->ps->velocity[2] = 0;
-						newVelocity[2] = 0;//newVelocity[2] = pm->ps->velocity[2]; AUSTIN CHANGE HERE
-
-						// Add upward boost
-						newVelocity[2] += 300.0f;
-
-						// Apply final velocity
-						VectorCopy(newVelocity, pm->ps->velocity);
-
-						// Set animation and flags
-						PM_SetAnim(pm, SETANIM_BOTH, anim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
-						pm->ps->pm_flags |= PMF_JUMPING;
+						PM_SetAnim( pm, SETANIM_BOTH, anim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD, 0 );
+						pm->ps->pm_flags |= PMF_JUMPING|PMF_SLOW_MO_FALL;
 						pm->cmd.upmove = 0;
-						pm->ps->pm_flags &= ~PMF_SLOW_MO_FALL;	//AUSTIN slow mo remover
-						pm->ps->pm_flags &= ~PMF_AIR_KICK_USED;	//AUSTIN reset kick after doing a wall boost
 					}
 				}
-		if ( pm->cmd.upmove != 0 )
+				if ( pm->cmd.upmove != 0 )
 				{//jump failed, so don't try to do normal jump code, just return
 					return qfalse;
 				}
@@ -2842,17 +2120,18 @@ static qboolean PM_CheckJump( void )
 					{//flip off wall
 						pm->ps->velocity[0] *= 0.5f;
 						pm->ps->velocity[1] *= 0.5f;
-						VectorMA(pm->ps->velocity, WALL_RUN_UP_BACKFLIP_SPEED, fwd, pm->ps->velocity);
+						VectorMA( pm->ps->velocity, WALL_RUN_UP_BACKFLIP_SPEED, fwd, pm->ps->velocity );
 						pm->ps->velocity[2] += 200;
 						int parts = SETANIM_LEGS;
-						if (!pm->ps->weaponTime) {
+						if ( !pm->ps->weaponTime )
+						{//not attacking, set anim on both
 							parts = SETANIM_BOTH;
 						}
-						PM_SetAnim(pm, parts, anim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
-						pm->ps->pm_flags |= PMF_JUMPING;
-						//pm->ps->pm_flags &= ~PMF_SLOW_MO_FALL; // some changes here to prevent slow fall after a wall run. I slashed this line out after adding it
+						PM_SetAnim( pm, parts, anim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD, 0 );
+						//FIXME: do damage to traceEnt, like above?
+						pm->ps->pm_flags |= PMF_JUMPING|PMF_SLOW_MO_FALL;
 						pm->cmd.upmove = 0;
-						PM_AddEvent(EV_JUMP);
+						PM_AddEvent( EV_JUMP );
 					}
 				}
 				if ( pm->cmd.upmove != 0 )
@@ -2937,7 +2216,7 @@ static qboolean PM_CheckJump( void )
 						else
 						{
 							VectorMA( pm->ps->velocity, -150, fwd, pm->ps->velocity );
-						} // AUSTIN this number was originally -150
+						}
 						//animate me
 						PM_SetAnim( pm, parts, wallWalkAnim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD, 0 );
 						pm->ps->forceJumpZStart = pm->ps->origin[2];//so we don't take damage if we land at same height
@@ -2989,7 +2268,7 @@ static qboolean PM_CheckJump( void )
 					&& !(pm->ps->pm_flags&PMF_JUMP_HELD)//have to have released jump since last press
 					&& (pm->cmd.forwardmove||pm->cmd.rightmove)//pushing in a direction
 					//&& pm->ps->forceRageRecoveryTime < pm->cmd.serverTime	//not in a force Rage recovery period
-					&& pm->ps->forcePowerLevel[FP_LEVITATION] >= FORCE_LEVEL_0//level 3 jump or better AUSTIN grab used to be FORCE_LEVEL_1 or greater!
+					&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_2//level 3 jump or better
 					&& pm->ps->forcePower > 10 //have enough force power to do another one
 					&& (level.time-pm->ps->lastOnGround) > 250 //haven't been on the ground in the last 1/4 of a second
 					&& (!(pm->ps->pm_flags&PMF_JUMPING)//not jumping
@@ -3014,22 +2293,19 @@ static qboolean PM_CheckJump( void )
 					vec3_t	idealNormal;
 					int		anim = -1;
 
-					if (pm->cmd.rightmove)
+					if ( pm->cmd.rightmove )
 					{
-						if (pm->cmd.rightmove > 0)
+						if ( pm->cmd.rightmove > 0 )
 						{
-							anim = BOTH_WALL_RUN_RIGHT; // AUSTIN grab right here
-							AngleVectors(fwdAngles, NULL, checkDir, NULL);
+							anim = BOTH_FORCEWALLREBOUND_RIGHT;
+							AngleVectors( fwdAngles, NULL, checkDir, NULL );
 						}
-						else if (pm->cmd.rightmove < 0)
+						else if ( pm->cmd.rightmove < 0 )
 						{
-							anim = BOTH_WALL_RUN_LEFT;
-							AngleVectors(fwdAngles, NULL, checkDir, NULL);
-							VectorScale(checkDir, -1, checkDir);
+							anim = BOTH_FORCEWALLREBOUND_LEFT;
+							AngleVectors( fwdAngles, NULL, checkDir, NULL );
+							VectorScale( checkDir, -1, checkDir );
 						}
-
-						// Enter slow-motion fall state
-						//pm->ps->pm_flags |= PMF_SLOW_MO_FALL; //AUSTIN adding this made me lose control of movement about 100 meters off the ground
 					}
 					else if ( pm->cmd.forwardmove > 0 )
 					{
@@ -4478,7 +3754,7 @@ void G_StartRoll( gentity_t *ent, int anim )
 	G_AddEvent( ent, EV_ROLL, 0 );
 	ent->client->ps.saberMove = LS_NONE;
 }
-//AUSTIN roll code here
+
 static qboolean PM_TryRoll( void )
 {
 	float rollDist = 192;//was 64;
@@ -4764,13 +4040,13 @@ static void PM_CrashLand( void )
 		}
 	}
 
-	PM_CrashLandEffect(); //AUSTIN roll on the ground
+	PM_CrashLandEffect();
 
-	if ((pm->ps->pm_flags & PMF_DUCKED) && (level.time - pm->ps->lastOnGround) > 500)
+	if ( (pm->ps->pm_flags&PMF_DUCKED) && (level.time-pm->ps->lastOnGround)>500 ) 
 	{//must be crouched and have been inthe air for half a second minimum
-		if (!PM_InOnGroundAnim(pm->ps) && !PM_InKnockDown(pm->ps))
+		if( !PM_InOnGroundAnim( pm->ps ) && !PM_InKnockDown( pm->ps ) )
 		{//roll!
-			if (PM_TryRoll())
+			if ( PM_TryRoll() )
 			{//absorb some impact
 				delta *= 0.5f;
 			}
@@ -4778,14 +4054,14 @@ static void PM_CrashLand( void )
 	}
 
 	// If he just entered the water (from a fall presumably), absorb some of the impact.
-	if (pm->waterlevel >= 2)
+	if ( pm->waterlevel >= 2 )
 	{
 		delta *= 0.4f;
 	}
-
-	if (signEB * delta < 1)
+	
+	if ( signEB * delta < 1 ) 
 	{
-		AddSoundEvent(pm->gent, pm->ps->origin, 32, AEL_MINOR, qfalse, qtrue);
+		AddSoundEvent( pm->gent, pm->ps->origin, 32, AEL_MINOR, qfalse, qtrue );
 		return;
 	}
 
@@ -7402,7 +6678,7 @@ void PM_CmdForRoll( playerState_t *ps, usercmd_t *pCmd )
 	switch ( ps->legsAnim )
 	{
 	case BOTH_ROLL_F:
-		pCmd->forwardmove = 327; //AUSTIN roll forward was originally 127
+		pCmd->forwardmove = 127;
 		pCmd->rightmove = 0;
 		break;
 	case BOTH_ROLL_B:
@@ -10695,7 +9971,7 @@ saberMoveName_t PM_NPCSaberAttackFromQuad( int quad )
 		return newmove;
 	}
 }
-//AUSTIN some saber attacks here
+
 int PM_SaberMoveQuadrantForMovement( usercmd_t *ucmd )
 {
 	if ( ucmd->rightmove > 0 )
@@ -11981,12 +11257,18 @@ qboolean PM_SaberThrowable( void )
 	return qfalse;
 }
 
-//AUSTIN kick check here
-qboolean PM_CheckAltKickAttack(void)
+qboolean PM_CheckAltKickAttack( void )
 {
-	if (pm->cmd.buttons & BUTTON_WALKING)
+	if ( (pm->cmd.buttons&BUTTON_ALT_ATTACK) 
+		&& (!(pm->ps->pm_flags&PMF_ALT_ATTACK_HELD) ||PM_SaberInReturn(pm->ps->saberMove))
+		&& (!PM_FlippingAnim(pm->ps->legsAnim)||pm->ps->legsAnimTimer<=250)
+		&& (!PM_SaberThrowable()) 
+		&& pm->ps->SaberActive()
+		&& !(pm->ps->saber[0].saberFlags&SFL_NO_KICKS)//okay to do kicks with this saber
+		&& (!pm->ps->dualSabers || !(pm->ps->saber[1].saberFlags&SFL_NO_KICKS) )//okay to do kicks with this saber
+		)
 	{
-		return qtrue; // allow kick regardless of current animation
+		return qtrue;
 	}
 	return qfalse;
 }
@@ -12041,7 +11323,7 @@ qboolean PM_CheckUpsideDownAttack( void )
 			}
 		}
 		//NOTE: falls through on purpose
-	case BOTH_FLIP_HOLD7:	//AUSTIN slow mo thing here for some reason
+	case BOTH_FLIP_HOLD7:
 		pm->ps->pm_flags |= PMF_SLOW_MO_FALL;
 		PM_SetSaberMove( LS_UPSIDE_DOWN_ATTACK );
 		return qtrue;
@@ -12078,7 +11360,7 @@ qboolean PM_SaberMoveOkayForKata( void )
 		}
 	}
 }
-//AUSTIN kata check here
+
 qboolean PM_CanDoKata( void )
 {
 	if ( PM_InSecondaryStyle() )
@@ -12185,48 +11467,6 @@ void PM_TryGrab( void )
 	}
 }
 
-// ----- MEDGE Movement addition -----
-qboolean PM_TryAirWallRun(trace_t* trace) {
-	if (!pm->gent || !pm->gent->client) {
-		return qfalse;
-	}
-	if (pm->gent->health <= 0) {
-		return qfalse; // must be alive
-	}
-	if (pm->ps->groundEntityNum != ENTITYNUM_NONE) {
-		return qfalse; // must be in the air
-	}
-
-	// require jump + sideways input
-	if ( pm->cmd.upmove > 0 && pm->cmd.rightmove != 0) {
-		return qfalse;
-	}
-
-	// wall must be vertical, not ground/ceiling
-	if (trace->plane.normal[2] != 0) {
-		return qfalse;
-	}
-
-	// right side wall-run
-	if (pm->cmd.rightmove > 0) {
-		PM_SetAnim(pm, SETANIM_BOTH, BOTH_WALL_RUN_RIGHT,
-			SETANIM_FLAG_RESTART | SETANIM_FLAG_OVERRIDE, 0);
-	}
-	// left side wall-run
-	else {
-		PM_SetAnim(pm, SETANIM_BOTH, BOTH_WALL_RUN_LEFT,
-			SETANIM_FLAG_RESTART | SETANIM_FLAG_OVERRIDE, 0);
-	}
-
-	// stick the player to the wall
-	VectorClear(pm->ps->velocity);
-	//pm->ps->pm_flags |= PMF_STUCK_TO_WALL;
-	pm->ps->pm_flags &= ~PMF_STUCK_TO_WALL;
-
-	return qtrue;
-}
-
-
 void PM_TryAirKick( saberMoveName_t kickMove )
 {
 	if ( pm->ps->groundEntityNum < ENTITYNUM_NONE )
@@ -12240,15 +11480,15 @@ void PM_TryAirKick( saberMoveName_t kickMove )
 		//it's silly to be able to do them right as you land.
 		//also looks wrong to transition from a non-complete flip anim...
 		if ((!PM_FlippingAnim( pm->ps->legsAnim ) || pm->ps->legsAnimTimer <= 0) &&
-			gDist > 1.0f && //WAS 64 strict minimum
-			gDist > (-pm->ps->velocity[2])-1.0f //WAS 64 make sure we are high to ground relative to downward velocity as well
+			gDist > 64.0f && //strict minimum
+			gDist > (-pm->ps->velocity[2])-64.0f //make sure we are high to ground relative to downward velocity as well
 			)
 		{
 			PM_SetSaberMove( kickMove );
 		}
 		else
 		{//leave it as a normal kick unless we're too high up
-			if (gDist > 1.0f || pm->ps->velocity[2] >= 0) //AUSTIN kick won't be air kick if too close to ground. Changed from 128
+			if ( gDist > 128.0f || pm->ps->velocity[2] >= 0 )
 			{ //off ground, but too close to ground
 			}
 			else
@@ -12272,191 +11512,171 @@ void PM_TryAirKick( saberMoveName_t kickMove )
 		}
 	}
 }
-//AUSTIN kick move here
-// define a new flag for air kick usage
-void PM_CheckKick(void)
+
+void PM_CheckKick( void )
 {
-	if (!PM_KickMove(pm->ps->saberMove) &&
-		!(pm->ps->pm_flags & PMF_DUCKED) &&
-		(pm->cmd.upmove >= 0))
-	{
-		// ✴ Forcefully clear current states
-		pm->ps->pm_flags &= ~(PMF_JUMPING);
-		pm->ps->legsAnimTimer = 0;
-		pm->ps->torsoAnimTimer = 0;
-		pm->ps->saberMove = LS_NONE;
-		//pm->ps->pm_flags |= PMF_SLOW_MO_FALL; // we don't want slow fall
-
-		// reset air kick if touching ground
-		if (pm->ps->groundEntityNum != ENTITYNUM_NONE)
-		{
-			pm->ps->pm_flags &= ~PMF_AIR_KICK_USED;
-		}
-
-		// Side kicks
-		if (pm->cmd.rightmove)
-		{
-			if (pm->cmd.rightmove > 0)
-			{ // kick right
-				if (pm->ps->groundEntityNum == ENTITYNUM_NONE || pm->cmd.upmove > 0)
-					PM_TryAirKick(LS_KICK_R_AIR);
+	if ( !PM_KickMove( pm->ps->saberMove )//not already in a kick
+		&& !(pm->ps->pm_flags&PMF_DUCKED)//not ducked
+		&& (pm->cmd.upmove >= 0 ) )//not trying to duck
+	{//player kicks
+		//FIXME: only if FP_SABER_OFFENSE >= 3
+		if ( pm->cmd.rightmove )
+		{//kick to side
+			if ( pm->cmd.rightmove > 0 )
+			{//kick right
+				if ( pm->ps->groundEntityNum == ENTITYNUM_NONE 
+					|| pm->cmd.upmove > 0 )
+				{
+					PM_TryAirKick( LS_KICK_R_AIR );
+				}
 				else
-					PM_SetSaberMove(LS_KICK_R);
+				{
+					PM_SetSaberMove( LS_KICK_R );
+				}
 			}
 			else
-			{ // kick left
-				if (pm->ps->groundEntityNum == ENTITYNUM_NONE || pm->cmd.upmove > 0)
-					PM_TryAirKick(LS_KICK_L_AIR);
+			{//kick left
+				if ( pm->ps->groundEntityNum == ENTITYNUM_NONE 
+					|| pm->cmd.upmove > 0 )
+				{
+					PM_TryAirKick( LS_KICK_L_AIR );
+				}
 				else
-					PM_SetSaberMove(LS_KICK_L);
+				{
+					PM_SetSaberMove( LS_KICK_L );
+				}
 			}
 			pm->cmd.rightmove = 0;
 		}
-		// Forward/back kicks
-		else if (pm->cmd.forwardmove)
-		{
-			if (pm->cmd.forwardmove > 0) // forward kick
-			{
-				if (pm->ps->groundEntityNum == ENTITYNUM_NONE || pm->cmd.upmove > 0)
+		else if ( pm->cmd.forwardmove )
+		{//kick front/back
+			if ( pm->cmd.forwardmove > 0 )
+			{//kick fwd
+				if ( pm->ps->groundEntityNum == ENTITYNUM_NONE
+					|| pm->cmd.upmove > 0 )
 				{
-					PM_TryAirKick(LS_KICK_F_AIR);
-
-					// Mirror's Edge style: only allow one air kick per jump
-					if (!(pm->ps->pm_flags & PMF_AIR_KICK_USED))
-					{
-						// Redirect current speed like the lunge move does
-						vec3_t fwdAngles, kickFwd;
-						VectorCopy(pm->ps->viewangles, fwdAngles);
-						fwdAngles[PITCH] = fwdAngles[ROLL] = 0;
-						AngleVectors(fwdAngles, kickFwd, NULL, NULL);
-
-						// Flatten velocity to get current horizontal speed
-						vec3_t currentVel = { pm->ps->velocity[0], pm->ps->velocity[1], 0 };
-						float currentSpeed = VectorLength(currentVel);
-
-						// Zero out velocity
-						pm->ps->velocity[0] = 0;
-						pm->ps->velocity[1] = 0;
-						pm->ps->velocity[2] = 0;
-
-						// Apply horizontal redirection using current speed + kick boost
-						vec3_t redirected;
-						VectorNormalize(kickFwd);
-						VectorScale(kickFwd, currentSpeed, redirected);
-						VectorCopy(redirected, pm->ps->velocity);
-
-						// add upward boost
-						pm->ps->velocity[2] += 200.0f;
-
-						// mark air kick as used
-						pm->ps->pm_flags |= PMF_AIR_KICK_USED;
-					}
+					PM_TryAirKick( LS_KICK_F_AIR );
 				}
+				/*
+				else if ( pm->ps->weapon == WP_SABER
+					&& pm->ps->saberAnimLevel == SS_STAFF
+					&& pm->gent 
+					&& G_CheckEnemyPresence( pm->gent, DIR_FRONT, 64, 0.8f ) )
+				{//FIXME: don't jump while doing this move and don't do this move if in air
+					PM_SetSaberMove( LS_HILT_BASH );
+				}
+				*/
 				else
 				{
-					PM_SetSaberMove(LS_KICK_F);
+					PM_SetSaberMove( LS_KICK_F );
 				}
 			}
-			else // backward kick
+			else if ( pm->ps->groundEntityNum == ENTITYNUM_NONE
+					|| pm->cmd.upmove > 0 )
 			{
-				if (pm->ps->groundEntityNum == ENTITYNUM_NONE || pm->cmd.upmove > 0)
-					PM_TryAirKick(LS_KICK_B_AIR);
-				else
-					PM_SetSaberMove(LS_KICK_B);
+				PM_TryAirKick( LS_KICK_B_AIR );
 			}
-
+			else
+			{//kick back
+				PM_SetSaberMove( LS_KICK_B );
+			}
 			pm->cmd.forwardmove = 0;
 		}
-		// Enemy in front auto-kick
-		else if (pm->gent && pm->gent->enemy && G_CanKickEntity(pm->gent, pm->gent->enemy))
-		{
-			if (PM_PickAutoMultiKick(qfalse))
-			{
-				if (pm->ps->saberMove == LS_KICK_RL)
-				{
-					if (d_slowmodeath->integer > 3)
+		else if ( pm->gent 
+			&& pm->gent->enemy
+			&& G_CanKickEntity( pm->gent, pm->gent->enemy ) )
+		{//auto-pick?
+			if ( /*(pm->ps->pm_flags&PMF_ALT_ATTACK_HELD)
+				&& (pm->cmd.buttons&BUTTON_ATTACK)
+				&&*/ PM_PickAutoMultiKick( qfalse ) )
+			{//kicked!
+				if ( pm->ps->saberMove == LS_KICK_RL )
+				{//just pull back
+					if ( d_slowmodeath->integer > 3 )
 					{
-						G_StartMatrixEffect(pm->gent, MEF_NO_SPIN, pm->ps->legsAnimTimer + 500);
+						G_StartMatrixEffect( pm->gent, MEF_NO_SPIN, pm->ps->legsAnimTimer+500 );
 					}
 				}
 				else
-				{
-					if (d_slowmodeath->integer > 3)
+				{//normal spin
+					if ( d_slowmodeath->integer > 3 )
 					{
-						G_StartMatrixEffect(pm->gent, 0, pm->ps->legsAnimTimer + 500);
+	                    G_StartMatrixEffect( pm->gent, 0, pm->ps->legsAnimTimer+500 );
 					}
 				}
-
-				if (pm->ps->groundEntityNum == ENTITYNUM_NONE &&
-					(pm->ps->saberMove == LS_KICK_S || pm->ps->saberMove == LS_KICK_BF || pm->ps->saberMove == LS_KICK_RL))
-				{
+				if ( pm->ps->groundEntityNum == ENTITYNUM_NONE 
+					&&( pm->ps->saberMove == LS_KICK_S 
+						||pm->ps->saberMove == LS_KICK_BF
+						||pm->ps->saberMove == LS_KICK_RL ) )
+				{//in the air and doing a jump-kick, which is a ground anim, so....
+					//cut z velocity...?
 					pm->ps->velocity[2] = 0;
 				}
 				pm->cmd.upmove = 0;
 			}
 			else
 			{
-				saberMoveName_t kickMove = PM_PickAutoKick(pm->gent->enemy);
-				if (kickMove != LS_NONE)
-				{
-					PM_SetSaberMove(kickMove);
-
+				saberMoveName_t kickMove = PM_PickAutoKick( pm->gent->enemy );
+				if ( kickMove != LS_NONE )
+				{//Matrix?
+					PM_SetSaberMove( kickMove );
 					int meFlags = 0;
-					switch (kickMove)
+					switch ( kickMove )
 					{
-					case LS_KICK_B:
-					case LS_KICK_B_AIR:
+					case LS_KICK_B://just pull back
+					case LS_KICK_B_AIR://just pull back
 						meFlags = MEF_NO_SPIN;
 						break;
-					case LS_KICK_L:
-					case LS_KICK_L_AIR:
+					case LS_KICK_L://spin to the left
+					case LS_KICK_L_AIR://spin to the left
 						meFlags = MEF_REVERSE_SPIN;
 						break;
 					default:
 						break;
 					}
-
-					if (d_slowmodeath->integer > 3)
+					if ( d_slowmodeath->integer > 3 )
 					{
-						G_StartMatrixEffect(pm->gent, meFlags, pm->ps->legsAnimTimer + 500);
+						G_StartMatrixEffect( pm->gent, meFlags, pm->ps->legsAnimTimer+500 );
 					}
 				}
 			}
 		}
-	}
-	else
-	{
-		if (PM_PickAutoMultiKick(qtrue))
+		else
 		{
-			int meFlags = 0;
-			switch (pm->ps->saberMove)
+			if ( PM_PickAutoMultiKick( qtrue ) )
 			{
-			case LS_KICK_RL:
-			case LS_KICK_B:
-			case LS_KICK_B_AIR:
-				meFlags = MEF_NO_SPIN;
-				break;
-			case LS_KICK_L:
-			case LS_KICK_L_AIR:
-				meFlags = MEF_REVERSE_SPIN;
-				break;
-			default:
-				break;
+				int meFlags = 0;
+				switch ( pm->ps->saberMove )
+				{
+				case LS_KICK_RL://just pull back
+				case LS_KICK_B://just pull back
+				case LS_KICK_B_AIR://just pull back
+					meFlags = MEF_NO_SPIN;
+					break;
+				case LS_KICK_L://spin to the left
+				case LS_KICK_L_AIR://spin to the left
+					meFlags = MEF_REVERSE_SPIN;
+					break;
+				default:
+					break;
+				}
+				if ( d_slowmodeath->integer > 3 )
+				{
+					G_StartMatrixEffect( pm->gent, meFlags, pm->ps->legsAnimTimer+500 );
+				}
+				if ( pm->ps->groundEntityNum == ENTITYNUM_NONE 
+					&&( pm->ps->saberMove == LS_KICK_S 
+						||pm->ps->saberMove == LS_KICK_BF
+						||pm->ps->saberMove == LS_KICK_RL ) )
+				{//in the air and doing a jump-kick, which is a ground anim, so....
+					//cut z velocity...?
+					pm->ps->velocity[2] = 0;
+				}
+				pm->cmd.upmove = 0;
 			}
-			if (d_slowmodeath->integer > 3)
-			{
-				G_StartMatrixEffect(pm->gent, meFlags, pm->ps->legsAnimTimer + 500);
-			}
-			if (pm->ps->groundEntityNum == ENTITYNUM_NONE &&
-				(pm->ps->saberMove == LS_KICK_S || pm->ps->saberMove == LS_KICK_BF || pm->ps->saberMove == LS_KICK_RL))
-			{
-				pm->ps->velocity[2] = 0;
-			}
-			pm->cmd.upmove = 0;
 		}
 	}
 }
-// ----- MEDGE Movement addition -----
 
 void PM_CheckClearSaberBlock( void )
 {
@@ -15736,12 +14956,13 @@ void Pmove( pmove_t *pmove )
 
 	// determine the time
 	pml.msec = pmove->cmd.serverTime - pm->ps->commandTime;
+
 	if ( pml.msec < 1 ) {
 		pml.msec = 1;
 	} else if ( pml.msec > 200 ) {
 		pml.msec = 200;
 	}
-	
+
 	pm->ps->commandTime = pmove->cmd.serverTime;
 
 	// save old org in case we get stuck
